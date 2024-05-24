@@ -149,7 +149,7 @@ pub async fn run(app: App, mut shutdown_rx: ShutdownRx, bot_tx: Sender<BotMessag
                 op.description("Search user logs using the provided query")
             }),
         )
-        .api_route("/optout", post(handlers::optout))
+        //.api_route("/optout", post(handlers::optout))
         .api_route("/capabilities", get(capabilities))
         .route("/docs", Redoc::new("/openapi.json").axum_route())
         .route("/openapi.json", get(serve_openapi))
