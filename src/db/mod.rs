@@ -3,10 +3,14 @@ pub mod schema;
 pub mod writer;
 
 pub use migrations::run as setup_db;
+use writer::FlushBuffer;
 
 use crate::{
     error::Error,
-    logs::{schema::LogRangeParams, stream::LogsStream},
+    logs::{
+        schema::LogRangeParams,
+        stream::{FlushBufferResponse, LogsStream},
+    },
     web::schema::{AvailableLogDate, LogsParams},
     Result,
 };
@@ -21,8 +25,11 @@ const CHANNEL_MULTI_QUERY_SIZE_DAYS: i64 = 14;
 pub async fn read_channel(
     db: &Client,
     channel_id: &str,
-    params: &LogRangeParams,
+    params: LogRangeParams,
+    flush_buffer: &FlushBuffer,
 ) -> Result<LogsStream> {
+    let buffer_response = FlushBufferResponse::new(flush_buffer, channel_id, None, params).await;
+
     let suffix = if params.logs_params.reverse {
         "DESC"
     } else {
@@ -31,8 +38,7 @@ pub async fn read_channel(
 
     let mut query = format!("SELECT ?fields FROM message_structured WHERE channel_id = ? AND timestamp >= ? AND timestamp < ? ORDER BY timestamp {suffix}");
 
-    let interval = Duration::days(CHANNEL_MULTI_QUERY_SIZE_DAYS);
-    if params.to - params.from > interval {
+    if params.to - params.from > Duration::days(CHANNEL_MULTI_QUERY_SIZE_DAYS) {
         let count = db
             .query("SELECT count() FROM (SELECT timestamp FROM message_structured WHERE channel_id = ? AND timestamp >= ? AND timestamp < ? LIMIT 1)")
             .bind(channel_id)
@@ -44,6 +50,8 @@ pub async fn read_channel(
         }
 
         let mut streams = Vec::with_capacity(1);
+
+        let interval = Duration::days(CHANNEL_MULTI_QUERY_SIZE_DAYS);
 
         let mut current_from = params.from;
         let mut current_to = current_from + interval;
@@ -68,13 +76,9 @@ pub async fn read_channel(
 
         debug!("Using {} queries for multi-query stream", streams.len());
 
-        LogsStream::new_multi_query(streams)
+        LogsStream::new_multi_query(streams, buffer_response)
     } else {
-        apply_limit_offset(
-            &mut query,
-            params.logs_params.limit,
-            params.logs_params.offset,
-        );
+        apply_limit_offset(&mut query, &buffer_response);
 
         let cursor = db
             .query(&query)
@@ -82,7 +86,7 @@ pub async fn read_channel(
             .bind(params.from.timestamp_millis() as f64 / 1000.0)
             .bind(params.to.timestamp_millis() as f64 / 1000.0)
             .fetch()?;
-        LogsStream::new_cursor(cursor).await
+        LogsStream::new_cursor(cursor, buffer_response).await
     }
 }
 
@@ -106,19 +110,19 @@ pub async fn read_user(
     db: &Client,
     channel_id: &str,
     user_id: &str,
-    params: &LogRangeParams,
+    params: LogRangeParams,
+    flush_buffer: &FlushBuffer,
 ) -> Result<LogsStream> {
+    let buffer_response =
+        FlushBufferResponse::new(flush_buffer, channel_id, Some(user_id), params).await;
+
     let suffix = if params.logs_params.reverse {
         "DESC"
     } else {
         "ASC"
     };
     let mut query = format!("SELECT * FROM message_structured WHERE channel_id = ? AND user_id = ? AND timestamp >= ? AND timestamp < ? ORDER BY timestamp {suffix}");
-    apply_limit_offset(
-        &mut query,
-        params.logs_params.limit,
-        params.logs_params.offset,
-    );
+    apply_limit_offset(&mut query, &buffer_response);
 
     let cursor = db
         .query(&query)
@@ -127,7 +131,7 @@ pub async fn read_user(
         .bind(params.from.timestamp_millis() as f64 / 1000.0)
         .bind(params.to.timestamp_millis() as f64 / 1000.0)
         .fetch()?;
-    LogsStream::new_cursor(cursor).await
+    LogsStream::new_cursor(cursor, buffer_response).await
 }
 
 pub async fn read_available_channel_logs(
@@ -274,12 +278,18 @@ pub async fn search_user_logs(
     channel_id: &str,
     user_id: &str,
     search: &str,
-    params: &LogsParams,
+    params: LogsParams,
 ) -> Result<LogsStream> {
+    let buffer_response = FlushBufferResponse::empty(LogRangeParams {
+        from: DateTime::UNIX_EPOCH,
+        to: DateTime::UNIX_EPOCH,
+        logs_params: params,
+    });
+
     let suffix = if params.reverse { "DESC" } else { "ASC" };
 
     let mut query = format!("SELECT * FROM message_structured WHERE channel_id = ? AND user_id = ? AND positionCaseInsensitive(text, ?) != 0 ORDER BY timestamp {suffix}");
-    apply_limit_offset(&mut query, params.limit, params.offset);
+    apply_limit_offset(&mut query, &buffer_response);
 
     let cursor = db
         .query(&query)
@@ -287,14 +297,15 @@ pub async fn search_user_logs(
         .bind(user_id)
         .bind(search)
         .fetch()?;
-    LogsStream::new_cursor(cursor).await
+
+    LogsStream::new_cursor(cursor, buffer_response).await
 }
 
-fn apply_limit_offset(query: &mut String, limit: Option<u64>, offset: Option<u64>) {
-    if let Some(limit) = limit {
+fn apply_limit_offset(query: &mut String, buffer_response: &FlushBufferResponse) {
+    if let Some(limit) = buffer_response.normalized_limit() {
         *query = format!("{query} LIMIT {limit}");
     }
-    if let Some(offset) = offset {
+    if let Some(offset) = buffer_response.normalized_offset() {
         *query = format!("{query} OFFSET {offset}");
     }
 }

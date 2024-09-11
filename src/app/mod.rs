@@ -16,6 +16,7 @@ pub struct App {
     //pub optout_codes: Arc<DashSet<String>>,
     pub db: Arc<clickhouse::Client>,
     pub config: Arc<Config>,
+    pub flush_buffer: FlushBuffer,
 }
 
 impl App {

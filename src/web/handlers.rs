@@ -118,7 +118,7 @@ async fn get_channel_logs_inner(
 ) -> Result<impl IntoApiResponse> {
     app.check_opted_out(channel_id, None)?;
 
-    let stream = read_channel(&app.db, channel_id, &channel_log_params).await?;
+    let stream = read_channel(&app.db, channel_id, channel_log_params, &app.flush_buffer).await?;
 
     let logs = LogsResponse {
         response_type: channel_log_params.logs_params.response_type(),
@@ -173,6 +173,8 @@ async fn get_user_logs(
         app.get_user_id_by_name(&user).await?
     };
 
+    app.check_opted_out(&channel_id, Some(&user_id))?;
+
     if let Some(Query(params)) = range_params {
         let logs = get_user_logs_inner(&app, &channel_id, &user_id, params).await?;
         Ok(logs.into_response())
@@ -225,6 +227,8 @@ async fn get_user_logs_by_date(
         ChannelIdType::Id => user_logs_path.channel_info.channel.clone(),
     };
 
+    app.check_opted_out(&channel_id, Some(&user_id))?;
+
     let year = user_logs_path.year.parse()?;
     let month = user_logs_path.month.parse()?;
 
@@ -251,9 +255,7 @@ async fn get_user_logs_inner(
     user_id: &str,
     log_params: LogRangeParams,
 ) -> Result<impl IntoApiResponse> {
-    app.check_opted_out(channel_id, Some(user_id))?;
-
-    let stream = read_user(&app.db, channel_id, user_id, &log_params).await?;
+    let stream = read_user(&app.db, channel_id, user_id, log_params, &app.flush_buffer).await?;
 
     let logs = LogsResponse {
         stream,
@@ -413,7 +415,7 @@ async fn search_user_logs(
         &channel_id,
         &user_id,
         &params.q,
-        &params.logs_params,
+        params.logs_params,
     )
     .await?;
 
