@@ -1,7 +1,12 @@
 pub mod cache;
 
 use self::cache::UsersCache;
-use crate::{config::Config, error::Error, Result};
+use crate::{
+    config::Config,
+    db::writer::FlushBuffer,
+    error::Error,
+    Result,
+};
 use anyhow::Context;
 use dashmap::DashSet;
 use std::{collections::HashMap, sync::Arc};
