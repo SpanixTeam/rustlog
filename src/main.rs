@@ -108,6 +108,7 @@ async fn run(config: Config, db: clickhouse::Client) -> anyhow::Result<()> {
         config: Arc::new(config),
         db: Arc::new(db),
         //optout_codes: Arc::default(),
+        flush_buffer,
     };
 
     let (bot_tx, bot_rx) = mpsc::channel(1);
