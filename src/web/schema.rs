@@ -164,3 +164,17 @@ pub struct UserLogPathParams {
     pub channel: String,
     pub user: String,
 }
+
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelLogsStats {
+    pub message_count: u64,
+    pub top_chatters: Vec<UserLogsStats>,
+}
+
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UserLogsStats {
+    pub user_id: String,
+    pub message_count: u64,
+}
