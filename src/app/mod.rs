@@ -3,7 +3,7 @@ pub mod cache;
 use self::cache::UsersCache;
 use crate::{
     config::Config,
-    db::{delete_user_logs, writer::FlushBuffer},
+    db::{delete_user_logs, schema::StructuredMessage, writer::FlushBuffer},
     error::Error,
     Result,
 };
@@ -23,7 +23,7 @@ pub struct App {
     pub db: Arc<clickhouse::Client>,
     pub config: Arc<Config>,
     pub flush_buffer: FlushBuffer,
-    pub firehose_tx: Sender<String>,
+    pub firehose_tx: Sender<StructuredMessage<'static>>,
 }
 
 impl App {
