@@ -19,7 +19,7 @@ pub struct App {
     pub helix_client: HelixClient<'static, reqwest::Client>,
     pub token: Arc<AppAccessToken>,
     pub users: UsersCache,
-    pub optout_codes: Arc<DashSet<String>>,
+    //pub optout_codes: Arc<DashSet<String>>,
     pub db: Arc<clickhouse::Client>,
     pub config: Arc<Config>,
     pub flush_buffer: FlushBuffer,
@@ -127,17 +127,17 @@ impl App {
         }
     }
 
-    pub async fn optout_user(&self, user_id: &str) -> anyhow::Result<()> {
-        delete_user_logs(&self.db, user_id)
-            .await
-            .context("Could not delete logs")?;
+    //pub async fn optout_user(&self, user_id: &str) -> anyhow::Result<()> {
+    //    delete_user_logs(&self.db, user_id)
+    //        .await
+    //        .context("Could not delete logs")?;
 
-        self.config.opt_out.insert(user_id.to_owned(), true);
-        self.config.save()?;
-        info!("User {user_id} opted out");
+    //    self.config.opt_out.insert(user_id.to_owned(), true);
+    //    self.config.save()?;
+    //    info!("User {user_id} opted out");
 
-        Ok(())
-    }
+    //    Ok(())
+    //}
 
     pub fn check_opted_out(&self, channel_id: &str, user_id: Option<&str>) -> Result<()> {
         if self.config.opt_out.contains_key(channel_id) {

@@ -109,7 +109,7 @@ async fn run(config: Config, db: clickhouse::Client) -> anyhow::Result<()> {
         users: UsersCache::default(),
         config: Arc::new(config),
         db: Arc::new(db),
-        optout_codes: Arc::default(),
+        //optout_codes: Arc::default(),
         flush_buffer,
         firehose_tx: firehose_tx.clone(),
     };
