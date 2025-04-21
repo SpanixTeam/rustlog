@@ -3,7 +3,7 @@ pub mod cache;
 use self::cache::UsersCache;
 use crate::{
     config::Config,
-    db::{delete_user_logs, schema::StructuredMessage, writer::FlushBuffer},
+    db::{schema::StructuredMessage, writer::FlushBuffer},
     error::Error,
     Result,
 };
