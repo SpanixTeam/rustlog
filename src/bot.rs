@@ -210,6 +210,11 @@ impl Bot {
             }
 
             let raw_irc = irc_message.as_raw_irc();
+
+            if let Err(err) = self.app.firehose_tx.send(raw_irc.clone()) {
+                debug!("Failed to send to firehose: {}", err);
+            }
+
             let unstructured = UnstructuredMessage {
                 channel_id,
                 user_id: &user_id,
