@@ -7,11 +7,12 @@ use super::{
         UserParam,
     },
 };
+use crate::logs::schema::message::{basic::BasicMessage, ResponseMessage};
 use crate::{
     app::App,
     db::{
         self, read_available_channel_logs, read_available_user_logs, read_channel,
-        read_random_channel_line, read_random_user_line, read_user,
+        read_random_channel_line, read_random_user_line, read_user, schema::StructuredMessage,
     },
     error::Error,
     logs::{schema::LogRangeParams, stream::LogsStream},
@@ -364,19 +365,51 @@ pub async fn get_user_name_history(
     Ok(Json(names))
 }
 
-pub async fn firehose(app: State<App>, ws: WebSocketUpgrade) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| firehose_socket(socket, app.firehose_tx.subscribe()))
+pub async fn firehose(
+    app: State<App>,
+    ws: WebSocketUpgrade,
+    Query(logs_params): Query<LogsParams>,
+) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| {
+        firehose_socket(socket, app.firehose_tx.subscribe(), logs_params.json_basic)
+    })
 }
 
-async fn firehose_socket(socket: WebSocket, mut firehose_rx: broadcast::Receiver<String>) {
+async fn firehose_socket(
+    socket: WebSocket,
+    mut firehose_rx: broadcast::Receiver<StructuredMessage<'static>>,
+    json_basic: bool,
+) {
     let (mut sender, mut receiver) = socket.split();
 
     let mut send_task = tokio::spawn(async move {
         debug!("Websocket connected");
 
         while let Ok(message) = firehose_rx.recv().await {
-            debug!("Received message on firehose: {}", message);
-            if sender.send(Message::Text(message.into())).await.is_err() {
+            let raw_message = if json_basic {
+                match BasicMessage::from_structured(&message) {
+                    Ok(basic_msg) => match serde_json::to_string(&basic_msg) {
+                        Ok(json) => json,
+                        Err(err) => {
+                            debug!("Failed to serialize BasicMessage: {}", err);
+                            continue;
+                        }
+                    },
+                    Err(err) => {
+                        debug!("Failed to convert to BasicMessage: {}", err);
+                        continue;
+                    }
+                }
+            } else {
+                message.to_raw_irc()
+            };
+
+            debug!("Sending message on firehose: {}", raw_message);
+            if sender
+                .send(Message::Text(raw_message.into()))
+                .await
+                .is_err()
+            {
                 debug!("Websocket closed");
                 break;
             }
