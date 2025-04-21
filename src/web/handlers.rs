@@ -20,14 +20,19 @@ use crate::{
 };
 use aide::axum::IntoApiResponse;
 use axum::{
-    extract::{Path, Query, RawQuery, State},
+    extract::{
+        ws::{Message, WebSocket},
+        Path, Query, RawQuery, State, WebSocketUpgrade,
+    },
     response::{IntoResponse, Redirect, Response},
     Json,
 };
 use axum_extra::{headers::CacheControl, TypedHeader};
 use chrono::{DateTime, Days, Months, NaiveDate, NaiveTime, Utc};
+use futures::{SinkExt, StreamExt};
 use rand::{distr::Alphanumeric, rng, Rng};
 use std::time::Duration;
+use tokio::sync::broadcast;
 use tracing::debug;
 
 pub async fn get_channels(app: State<App>) -> impl IntoApiResponse {
@@ -378,6 +383,37 @@ pub async fn get_user_name_history(
     let names = db::get_user_name_history(&app.db, &user_id).await?;
 
     Ok(Json(names))
+}
+
+pub async fn firehose(app: State<App>, ws: WebSocketUpgrade) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| firehose_socket(socket, app.firehose_tx.subscribe()))
+}
+
+async fn firehose_socket(socket: WebSocket, mut firehose_rx: broadcast::Receiver<String>) {
+    let (mut sender, mut receiver) = socket.split();
+
+    let mut send_task = tokio::spawn(async move {
+        debug!("Websocket connected");
+
+        while let Ok(message) = firehose_rx.recv().await {
+            debug!("Received message on firehose: {}", message);
+            if sender.send(Message::Text(message.into())).await.is_err() {
+                debug!("Websocket closed");
+                break;
+            }
+        }
+    });
+
+    let mut recv_task = tokio::spawn(async move {
+        while let Some(Ok(_)) = receiver.next().await {
+            debug!("Received message on websocket");
+        }
+    });
+
+    tokio::select! {
+        _ = &mut send_task => {},
+        _ = &mut recv_task => {},
+    }
 }
 
 pub async fn optout(app: State<App>) -> Json<String> {
