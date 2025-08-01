@@ -176,6 +176,7 @@ pub struct ChannelLogsStats {
 #[serde(rename_all = "camelCase")]
 pub struct UserLogsStats {
     pub user_id: String,
+    pub user_login: Option<String>,
     pub message_count: u64,
 }
 
@@ -187,8 +188,6 @@ pub struct UserNameHistoryParam {
 #[derive(Serialize, JsonSchema)]
 pub struct PreviousName {
     pub user_login: String,
-    #[schemars(with = "String")]
     pub last_timestamp: DateTime<Utc>,
-    #[schemars(with = "String")]
     pub first_timestamp: DateTime<Utc>,
 }

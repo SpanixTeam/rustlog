@@ -13,7 +13,7 @@ use aide::{
         ApiRouter, IntoApiResponse,
     },
     openapi::OpenApi,
-    redoc::Redoc,
+    scalar::Scalar,
 };
 use axum::{
     extract::Request,
@@ -153,7 +153,7 @@ pub async fn run(app: App, mut shutdown_rx: ShutdownRx, bot_tx: Sender<BotMessag
         //.api_route("/optout", post(handlers::optout))
         .api_route("/capabilities", get(capabilities))
         .route("/firehose", any(handlers::firehose))
-        .route("/docs", Redoc::new("/openapi.json").axum_route())
+        .route("/docs", Scalar::new("/openapi.json").axum_route())
         .route("/openapi.json", get(serve_openapi))
         .route("/assets/{*asset}", get(frontend::static_asset))
         .fallback(frontend::static_asset)
