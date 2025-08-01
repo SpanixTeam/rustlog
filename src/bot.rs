@@ -14,6 +14,7 @@ use tokio::{
     time::sleep,
 };
 use tracing::{debug, error, info, log::warn, trace};
+use twitch_api::helix::Cursor;
 use twitch_irc::{
     login::LoginCredentials,
     message::{AsRawIRC, IRCMessage, ServerMessage},
@@ -129,6 +130,41 @@ impl Bot {
                             .await
                         {
                             error!("Could not join channels: {err}");
+                        }
+                    }
+                }
+            }
+        });
+
+        // Auto joiner
+        let app = self.app.clone();
+        let live_client = client.clone();
+        tokio::spawn(async move {
+            loop {
+                sleep(Duration::from_secs(60)).await;
+
+                let mut cursor: Option<Cursor> = None;
+                loop {
+                    match app.get_livestreams(cursor).await {
+                        Ok((data, pagination)) => {
+                            for stream in data {
+                                if stream.viewer_count < 2 {
+                                    break;
+                                }
+
+                                live_client
+                                    .join(stream.user_login.to_string())
+                                    .expect("Failed to join live channel");
+                            }
+
+                            cursor = pagination;
+                            if cursor.is_none() {
+                                break;
+                            }
+                        }
+                        Err(err) => {
+                            error!("Could not fetch livestreams: {err}");
+                            break;
                         }
                     }
                 }

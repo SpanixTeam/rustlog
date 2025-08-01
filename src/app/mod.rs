@@ -9,9 +9,13 @@ use crate::{
 };
 use anyhow::Context;
 use dashmap::DashSet;
-use std::{collections::HashMap, sync::Arc};
+use std::{borrow::Cow, collections::HashMap, sync::Arc};
 use tracing::{debug, info};
-use twitch_api::{helix::users::GetUsersRequest, twitch_oauth2::AppAccessToken, HelixClient};
+use twitch_api::{
+    helix::{streams::GetStreamsRequest, users::GetUsersRequest, Cursor},
+    twitch_oauth2::AppAccessToken,
+    HelixClient,
+};
 
 #[derive(Clone)]
 pub struct App {
@@ -123,6 +127,18 @@ impl App {
                 }
             }
         }
+    }
+
+    pub async fn get_livestreams(
+        &self,
+        cursor: Option<Cursor>,
+    ) -> Result<(Vec<twitch_api::helix::streams::Stream>, Option<Cursor>)> {
+        let mut request = GetStreamsRequest::default();
+        request.first = Some(100);
+        request.after = cursor.as_ref().map(|c| Cow::Borrowed(c.as_ref()));
+
+        let response = self.helix_client.req_get(request, &*self.token).await?;
+        Ok((response.data, response.pagination))
     }
 
     pub async fn optout_user(&self, user_id: &str) -> anyhow::Result<()> {
