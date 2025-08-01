@@ -231,11 +231,11 @@ impl Bot {
         let irc_message = IRCMessage::from(msg);
 
         if let Some((channel_id, maybe_user_id)) = extract_channel_and_user_from_raw(&irc_message) {
-            if !channel_id.is_empty() {
-                MESSAGES_RECEIVED_COUNTERS
-                    .with_label_values(&[channel_id])
-                    .inc();
-            }
+            // if !channel_id.is_empty() {
+            //     MESSAGES_RECEIVED_COUNTERS
+            //         .with_label_values(&[channel_id])
+            //         .inc();
+            // }
 
             let timestamp = extract_raw_timestamp(&irc_message)
                 .unwrap_or_else(|| Utc::now().timestamp_millis().try_into().unwrap());
