@@ -14,6 +14,7 @@ use tokio::{
     time::sleep,
 };
 use tracing::{debug, error, info, log::warn, trace};
+use twitch_api::helix::Cursor;
 use twitch_irc::{
     login::LoginCredentials,
     message::{AsRawIRC, IRCMessage, ServerMessage},
@@ -135,6 +136,41 @@ impl Bot {
             }
         });
 
+        // Auto joiner
+        let app = self.app.clone();
+        let live_client = client.clone();
+        tokio::spawn(async move {
+            loop {
+                sleep(Duration::from_secs(60)).await;
+
+                let mut cursor: Option<Cursor> = None;
+                loop {
+                    match app.get_livestreams(cursor).await {
+                        Ok((data, pagination)) => {
+                            for stream in data {
+                                if stream.viewer_count < 2 {
+                                    break;
+                                }
+
+                                live_client
+                                    .join(stream.user_login.to_string())
+                                    .expect("Failed to join live channel");
+                            }
+
+                            cursor = pagination;
+                            if cursor.is_none() {
+                                break;
+                            }
+                        }
+                        Err(err) => {
+                            error!("Could not fetch livestreams: {err}");
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+
         loop {
             tokio::select! {
                 Some(msg) = receiver.recv() => {
@@ -195,11 +231,11 @@ impl Bot {
         let irc_message = IRCMessage::from(msg);
 
         if let Some((channel_id, maybe_user_id)) = extract_channel_and_user_from_raw(&irc_message) {
-            if !channel_id.is_empty() {
-                MESSAGES_RECEIVED_COUNTERS
-                    .with_label_values(&[channel_id])
-                    .inc();
-            }
+            // if !channel_id.is_empty() {
+            //     MESSAGES_RECEIVED_COUNTERS
+            //         .with_label_values(&[channel_id])
+            //         .inc();
+            // }
 
             let timestamp = extract_raw_timestamp(&irc_message)
                 .unwrap_or_else(|| Utc::now().timestamp_millis().try_into().unwrap());
