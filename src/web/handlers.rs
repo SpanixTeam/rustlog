@@ -31,10 +31,20 @@ use axum::{
 use axum_extra::{headers::CacheControl, TypedHeader};
 use chrono::{DateTime, Days, Months, NaiveDate, NaiveTime, Utc};
 use futures::{SinkExt, StreamExt};
+use lazy_static::lazy_static;
+use prometheus::{register_int_gauge, IntGauge};
 use rand::{distr::Alphanumeric, rng, Rng};
 use std::time::Duration;
 use tokio::sync::broadcast;
 use tracing::debug;
+
+lazy_static! {
+    static ref FIREHOSE_CLIENTS_GAUGE: IntGauge = register_int_gauge!(
+        "rustlog_firehose_clients_count",
+        "How many firehose clients are connected to the websocket",
+    )
+    .unwrap();
+}
 
 pub async fn get_channels(app: State<App>) -> impl IntoApiResponse {
     let channel_ids = app.config.channels.read().unwrap().clone();
@@ -405,6 +415,7 @@ async fn firehose_socket(
 
     let mut send_task = tokio::spawn(async move {
         debug!("Websocket connected");
+        FIREHOSE_CLIENTS_GAUGE.inc();
 
         while let Ok(message) = firehose_rx.recv().await {
             let raw_message = if json_basic {
@@ -432,6 +443,7 @@ async fn firehose_socket(
                 .is_err()
             {
                 debug!("Websocket closed");
+                FIREHOSE_CLIENTS_GAUGE.dec();
                 break;
             }
         }
