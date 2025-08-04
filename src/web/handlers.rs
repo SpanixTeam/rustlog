@@ -414,9 +414,6 @@ async fn firehose_socket(
     let (mut sender, mut receiver) = socket.split();
 
     let mut send_task = tokio::spawn(async move {
-        debug!("Websocket connected");
-        FIREHOSE_CLIENTS_GAUGE.inc();
-
         while let Ok(message) = firehose_rx.recv().await {
             let raw_message = if json_basic {
                 match BasicMessage::from_structured(&message) {
@@ -442,8 +439,6 @@ async fn firehose_socket(
                 .await
                 .is_err()
             {
-                debug!("Websocket closed");
-                FIREHOSE_CLIENTS_GAUGE.dec();
                 break;
             }
         }
@@ -455,10 +450,16 @@ async fn firehose_socket(
         }
     });
 
+    debug!("Websocket connected");
+    FIREHOSE_CLIENTS_GAUGE.inc();
+
     tokio::select! {
         _ = &mut send_task => {},
         _ = &mut recv_task => {},
     }
+
+    debug!("Websocket closed");
+    FIREHOSE_CLIENTS_GAUGE.dec();
 }
 
 pub async fn optout(app: State<App>) -> Json<String> {
