@@ -205,9 +205,9 @@ impl Bot {
                 .unwrap_or_else(|| Utc::now().timestamp_millis().try_into().unwrap());
             let user_id = maybe_user_id.unwrap_or_default().to_owned();
 
-            if self.app.config.opt_out.contains_key(&user_id) {
-                return Ok(());
-            }
+            // if self.app.config.opt_out.contains_key(&user_id) {
+                // return Ok(());
+            // }
 
             let raw_irc = irc_message.as_raw_irc();
 
